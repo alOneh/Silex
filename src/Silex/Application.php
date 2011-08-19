@@ -17,12 +17,15 @@ use Symfony\Component\HttpKernel\Event\KernelEvent;
 use Symfony\Component\HttpKernel\Event\GetResponseForControllerResultEvent;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Symfony\Component\HttpKernel\Event\FilterControllerEvent;
+use Symfony\Component\HttpKernel\Event\FilterResponseEvent;
+use Symfony\Component\HttpKernel\Event\GetResponseEvent;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\EventDispatcher\Event;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -186,11 +189,19 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      *
      * Before filters are run before any route has been matched.
      *
-     * @param mixed $callback Before filter callback
+     * @param mixed   $callback Before filter callback
+     * @param integer $priority The higher this value, the earlier an event
+     *                          listener will be triggered in the chain (defaults to 0)
      */
-    public function before($callback)
+    public function before($callback, $priority = 0)
     {
-        $this['dispatcher']->addListener(SilexEvents::BEFORE, $callback);
+        $this['dispatcher']->addListener(SilexEvents::BEFORE, function (GetResponseEvent $event) use ($callback) {
+            $ret = call_user_func($callback, $event->getRequest());
+
+            if ($ret instanceof Response) {
+                $event->setResponse($ret);
+            }
+        }, $priority);
     }
 
     /**
@@ -198,11 +209,15 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      *
      * After filters are run after the controller has been executed.
      *
-     * @param mixed $callback After filter callback
+     * @param mixed   $callback After filter callback
+     * @param integer $priority The higher this value, the earlier an event
+     *                          listener will be triggered in the chain (defaults to 0)
      */
-    public function after($callback)
+    public function after($callback, $priority = 0)
     {
-        $this['dispatcher']->addListener(SilexEvents::AFTER, $callback);
+        $this['dispatcher']->addListener(SilexEvents::AFTER, function (FilterResponseEvent $event) use ($callback) {
+            call_user_func($callback, $event->getRequest(), $event->getResponse());
+        }, $priority);
     }
 
     /**
@@ -229,20 +244,22 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      *
      * For this reason you should add logging handlers before output handlers.
      *
-     * @param mixed $callback Error handler callback, takes an Exception argument
+     * @param mixed   $callback Error handler callback, takes an Exception argument
+     * @param integer $priority The higher this value, the earlier an event
+     *                          listener will be triggered in the chain (defaults to 0)
      */
-    public function error($callback)
+    public function error($callback, $priority = 0)
     {
         $this['dispatcher']->addListener(SilexEvents::ERROR, function (GetResponseForErrorEvent $event) use ($callback) {
             $exception = $event->getException();
             $code = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : 500;
 
-            $result = $callback($exception, $code);
+            $result = call_user_func($callback, $exception, $code);
 
             if (null !== $result) {
                 $event->setStringResponse($result);
             }
-        });
+        }, $priority);
     }
 
     /**
@@ -351,7 +368,9 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
         } catch (RoutingException $e) {
             // make sure onSilexBefore event is dispatched
 
-            $this['dispatcher']->dispatch(SilexEvents::BEFORE);
+            if (HttpKernelInterface::MASTER_REQUEST === $event->getRequestType()) {
+                $this['dispatcher']->dispatch(SilexEvents::BEFORE, $event);
+            }
 
             if ($e instanceof ResourceNotFoundException) {
                 $message = sprintf('No route found for "%s %s"', $this['request']->getMethod(), $this['request']->getPathInfo());
@@ -364,7 +383,9 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
             throw $e;
         }
 
-        $this['dispatcher']->dispatch(SilexEvents::BEFORE);
+        if (HttpKernelInterface::MASTER_REQUEST === $event->getRequestType()) {
+            $this['dispatcher']->dispatch(SilexEvents::BEFORE, $event);
+        }
     }
 
     /**
@@ -402,7 +423,9 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      */
     public function onKernelResponse(Event $event)
     {
-        $this['dispatcher']->dispatch(SilexEvents::AFTER);
+        if (HttpKernelInterface::MASTER_REQUEST === $event->getRequestType()) {
+            $this['dispatcher']->dispatch(SilexEvents::AFTER, $event);
+        }
     }
 
     /**

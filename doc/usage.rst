@@ -29,7 +29,7 @@ are using apache you can use a ``.htaccess`` file for this.
         RewriteEngine On
         #RewriteBase /path/to/app
         RewriteCond %{REQUEST_FILENAME} !-f
-        RewriteRule ^(.*)$ index.php [QSA,L]
+        RewriteRule ^ index.php [L]
     </IfModule>
 
 .. note::
@@ -354,6 +354,26 @@ through before and after filters. All you need to do is pass a closure::
         // tear down
     });
 
+The before filter has access to the current Request, and can short-circuit the
+whole rendering by returning a Response::
+
+    $app->before(function (Request $request) {
+        // redirect the user to the login screen if access to the Resource is protected
+        if (...) {
+            return new RedirectResponse('/login');
+        }
+    });
+
+The after filter has access to the Request and the Response::
+
+    $app->after(function (Request $request, Response $response) {
+        // tweak the Response
+    });
+
+.. note::
+
+    The filters are only run for the "master" Request.
+
 Error handlers
 --------------
 
@@ -587,9 +607,9 @@ ioncube loader bug
 
 Ioncube loader is an extension that can decode PHP encoded file. 
 Unfortunately, old versions (prior to version 4.0.9) are not working well 
-with phar archive.
-You must either upgrade Ioncube loder to version 4.0.9+ or disable it by 
-commenting or removing this line in you php.ini file:
+with phar archives.
+You must either upgrade Ioncube loader to version 4.0.9 or newer or disable it 
+by commenting or removing this line in your php.ini file:
 
 .. code-block:: ini
 
