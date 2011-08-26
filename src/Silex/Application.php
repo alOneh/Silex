@@ -19,6 +19,7 @@ use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Symfony\Component\HttpKernel\Event\FilterControllerEvent;
 use Symfony\Component\HttpKernel\Event\FilterResponseEvent;
 use Symfony\Component\HttpKernel\Event\GetResponseEvent;
+use Symfony\Component\HttpKernel\EventListener\ResponseListener;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -81,6 +82,7 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
             if (isset($app['exception_handler'])) {
                 $dispatcher->addSubscriber($app['exception_handler']);
             }
+            $dispatcher->addListener(KernelEvents::RESPONSE, array(new ResponseListener($app['charset']), 'onKernelResponse'));
 
             return $dispatcher;
         });
@@ -96,6 +98,7 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
         $this['request.http_port'] = 80;
         $this['request.https_port'] = 443;
         $this['debug'] = false;
+        $this['charset'] = 'UTF-8';
     }
 
     /**
@@ -302,19 +305,18 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      */
     public function mount($prefix, $app)
     {
+        $prefix = rtrim($prefix, '/');
         $mountHandler = function (Request $request, $prefix) use ($app) {
             if (is_callable($app)) {
                 $app = $app();
             }
 
             foreach ($app['controllers']->all() as $controller) {
-                $controller->getRoute()->setPattern(rtrim($prefix, '/').$controller->getRoute()->getPattern());
+                $controller->getRoute()->setPattern($prefix.$controller->getRoute()->getPattern());
             }
 
             return $app->handle($request);
         };
-
-        $prefix = rtrim($prefix, '/');
 
         $this
             ->match($prefix.'/{path}', $mountHandler)
@@ -451,8 +453,6 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      */
     static public function getSubscribedEvents()
     {
-        // onKernelView listener is added manually because it has lower priority
-
         return array(
             KernelEvents::REQUEST    => 'onKernelRequest',
             KernelEvents::CONTROLLER => 'onKernelController',

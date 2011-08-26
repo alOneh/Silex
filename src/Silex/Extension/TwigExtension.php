@@ -18,12 +18,26 @@ use Symfony\Bridge\Twig\Extension\RoutingExtension as TwigRoutingExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension as TwigTranslationExtension;
 use Symfony\Bridge\Twig\Extension\FormExtension as TwigFormExtension;
 
+/**
+ * Twig extension.
+ *
+ * @author Fabien Potencier <fabien@symfony.com>
+ */
 class TwigExtension implements ExtensionInterface
 {
     public function register(Application $app)
     {
         $app['twig'] = $app->share(function () use ($app) {
-            $twig = new \Twig_Environment($app['twig.loader'], isset($app['twig.options']) ? $app['twig.options'] : array());
+            $app['twig.options'] = array_replace(
+                array(
+                    'charset'          => $app['charset'],
+                    'debug'            => $app['debug'],
+                    'strict_variables' => !$app['debug'],
+                ),
+                isset($app['twig.options']) ? $app['twig.options'] : array()
+            );
+
+            $twig = new \Twig_Environment($app['twig.loader'], $app['twig.options']);
             $twig->addGlobal('app', $app);
 
             if (isset($app['symfony_bridges'])) {
@@ -47,12 +61,19 @@ class TwigExtension implements ExtensionInterface
             return $twig;
         });
 
+        $app['twig.loader.filesystem'] = $app->share(function () use ($app) {
+            return new \Twig_Loader_Filesystem(isset($app['twig.path']) ? $app['twig.path'] : array());
+        });
+
+        $app['twig.loader.array'] = $app->share(function () use ($app) {
+            return new \Twig_Loader_Array(isset($app['twig.templates']) ? $app['twig.templates'] : array());
+        });
+
         $app['twig.loader'] = $app->share(function () use ($app) {
-            if (isset($app['twig.templates'])) {
-                return new \Twig_Loader_Array($app['twig.templates']);
-            } else {
-                return new \Twig_Loader_Filesystem($app['twig.path']);
-            }
+            return new \Twig_Loader_Chain(array(
+                $app['twig.loader.filesystem'],
+                $app['twig.loader.array'],
+            ));
         });
 
         if (isset($app['twig.class_path'])) {
