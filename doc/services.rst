@@ -1,9 +1,9 @@
 Services
 ========
 
-Silex is not only a microframework. It is also a micro service container.
-It does this by extending `Pimple <http://pimple-project.org>`_
-which provides service goodness in just 44 NCLOC.
+Silex is not only a microframework. It is also a micro service container. It
+does this by extending `Pimple <http://pimple.sensiolabs.org>`_ which provides
+service goodness in just 44 NCLOC.
 
 Dependency Injection
 --------------------
@@ -254,7 +254,7 @@ Core parameters
 
   Defaults to 80.
 
-  This parameter can be used by the ``UrlGeneratorExtension``.
+  This parameter can be used by the ``UrlGeneratorProvider``.
 
 * **request.https_port** (optional): Allows you to override the default port
   for HTTPS URLs. If the current request is HTTPS, it will always use the
@@ -262,7 +262,7 @@ Core parameters
 
   Defaults to 443.
 
-  This parameter can be used by the ``UrlGeneratorExtension``.
+  This parameter can be used by the ``UrlGeneratorProvider``.
 
 * **debug** (optional): Returns whether or not the application is running in
   debug mode.

@@ -142,31 +142,24 @@ Example POST route
 ~~~~~~~~~~~~~~~~~~
 
 POST routes signify the creation of a resource. An example for this is a
-feedback form. We will use `Swift Mailer
-<http://swiftmailer.org/>`_ and assume a copy of it to be present in the
-``vendor/swiftmailer`` directory::
-
-    require_once __DIR__.'/vendor/swiftmailer/lib/swift_required.php';
+feedback form. We will use the ``mail`` function to send an e-mail::
 
     use Symfony\Component\HttpFoundation\Request;
     use Symfony\Component\HttpFoundation\Response;
 
     $app->post('/feedback', function (Request $request) {
-        $message = \Swift_Message::newInstance()
-            ->setSubject('[YourSite] Feedback')
-            ->setFrom(array('noreply@yoursite.com'))
-            ->setTo(array('feedback@yoursite.com'))
-            ->setBody($request->get('message'));
-
-        $transport = \Swift_MailTransport::newInstance();
-        $mailer = \Swift_Mailer::newInstance($transport);
-        $mailer->send($message);
+        $message = $request->get('message');
+        mail('feedback@yoursite.com', '[YourSite] Feedback', $message);
 
         return new Response('Thank you for your feedback!', 201);
     });
 
-It is pretty straight forward. We include the Swift Mailer library,
-set up a message and send that message.
+It is pretty straightforward.
+
+.. note::
+
+    There is a `SwiftmailerServiceProvider <providers/swiftmailer>` included
+    that you can use instead of ``mail()``.
 
 The current ``request`` is automatically injected by Silex to the Closure
 thanks to the type hinting. It is an instance of `Request
@@ -319,7 +312,7 @@ have the value ``index``.
 Named routes
 ~~~~~~~~~~~~
 
-Certain extensions (such as ``UrlGenerator``) can make use of named routes.
+Some providers (such as ``UrlGeneratorProvider``) can make use of named routes.
 By default Silex will generate a route name for you, that cannot really be
 used. You can give a route a name by calling ``bind`` on the ``Controller``
 object that is returned by the routing methods::
@@ -337,7 +330,7 @@ object that is returned by the routing methods::
 
 .. note::
 
-    It only makes sense to name routes if you use extensions that make use
+    It only makes sense to name routes if you use providers that make use
     of the ``RouteCollection``.
 
 Before and after filters
@@ -412,8 +405,8 @@ once a response is returned, the following handlers are ignored.
 
 .. note::
 
-    Silex ships with an extension for `Monolog <https://github.com/Seldaek/monolog>`_
-    which handles logging of errors. Check out the *Extensions* chapter
+    Silex ships with a provider for `Monolog <https://github.com/Seldaek/monolog>`_
+    which handles logging of errors. Check out the *Providers* chapter
     for details.
 
 .. tip::
@@ -496,48 +489,6 @@ correctly, to prevent Cross-Site-Scripting attacks.
           );
       });
 
-Reusing applications
---------------------
-
-To make your applications reusable, return the ``$app`` variable instead of
-calling the ``run()`` method::
-
-    // blog.php
-    require_once __DIR__.'/silex.phar';
-
-    $app = new Silex\Application();
-
-    // define your blog app
-    $app->get('/post/{id}', function ($id) { ... });
-
-    // return the app instance
-    return $app;
-
-Running this application can now be done like this::
-
-    $app = require __DIR__.'/blog.php';
-    $app->run();
-
-This pattern allows you to easily "mount" this application under any other
-one::
-
-    $blog = require __DIR__.'/blog.php';
-
-    $app = new Silex\Application();
-    $app->mount('/blog', $blog);
-
-    // define your main app
-
-    $app->run();
-
-Now, blog posts are available under the ``/blog/post/{id}`` route, along side
-any other routes you might have defined.
-
-If you mount many applications, you might want to avoid the overhead of
-loading them all on each request by using the ``LazyApplication`` wrapper::
-
-    $blog = new Silex\LazyApplication(__DIR__.'/blog.php');
-
 Console
 -------
 
@@ -566,7 +517,7 @@ command:
     $ php silex.phar update
 
 This will automatically download a new ``silex.phar`` from
-``silex-project.org`` and replace the existing one.
+``silex.sensiolabs.org`` and replace the existing one.
 
 Pitfalls
 --------
@@ -584,6 +535,7 @@ the following may help.
 
     phar.readonly = Off
     phar.require_hash = Off
+    detect_unicode = Off
 
 If you are on Suhosin you will also have to set this:
 
@@ -610,10 +562,10 @@ The exact cause of this issue could not be determined yet.
 ioncube loader bug
 ~~~~~~~~~~~~~~~~~~
 
-Ioncube loader is an extension that can decode PHP encoded file. 
-Unfortunately, old versions (prior to version 4.0.9) are not working well 
+Ioncube loader is an extension that can decode PHP encoded file.
+Unfortunately, old versions (prior to version 4.0.9) are not working well
 with phar archives.
-You must either upgrade Ioncube loader to version 4.0.9 or newer or disable it 
+You must either upgrade Ioncube loader to version 4.0.9 or newer or disable it
 by commenting or removing this line in your php.ini file:
 
 .. code-block:: ini
