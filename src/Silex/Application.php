@@ -80,11 +80,11 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
         $this['dispatcher'] = $this->share(function () use ($app) {
             $dispatcher = new EventDispatcher();
             $dispatcher->addSubscriber($app);
-            if (isset($app['exception_handler'])) {
-                $dispatcher->addSubscriber($app['exception_handler']);
-            }
-            $dispatcher->addSubscriber(new ResponseListener($app['charset']));
-            $dispatcher->addSubscriber(new RouterListener($app['url_matcher']));
+
+            $urlMatcher = new LazyUrlMatcher(function () use ($app) {
+                return $app['url_matcher'];
+            });
+            $dispatcher->addSubscriber(new RouterListener($urlMatcher));
 
             return $dispatcher;
         });
@@ -120,7 +120,7 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
      * Registers a service provider.
      *
      * @param ServiceProviderInterface $provider A ServiceProviderInterface instance
-     * @param array                    $values    An array of values that customizes the provider
+     * @param array                    $values   An array of values that customizes the provider
      */
     public function register(ServiceProviderInterface $provider, array $values = array())
     {
@@ -313,8 +313,8 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
     /**
      * Mounts an application under the given route prefix.
      *
-     * @param string                                           $prefix The route prefix
-     * @param ControllerCollection|ControllerProviderInterface $app    A ControllerCollection or an ControllerProviderInterface instance
+     * @param string $prefix The route prefix
+     * @param ControllerCollection|ControllerProviderInterface $app A ControllerCollection or a ControllerProviderInterface instance
      */
     public function mount($prefix, $app)
     {
@@ -330,7 +330,7 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
     }
 
     /**
-     * Handles the request and deliver the response.
+     * Handles the request and delivers the response.
      *
      * @param Request $request Request to process
      */
@@ -343,6 +343,9 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
         $this->handle($request)->send();
     }
 
+    /**
+     * {@inheritdoc}
+     */
     public function handle(Request $request, $type = HttpKernelInterface::MASTER_REQUEST, $catch = true)
     {
         $this->beforeDispatched = false;
@@ -355,7 +358,24 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
     }
 
     /**
+     * Handles onEarlyKernelRequest events.
+     *
+     * @param KernelEvent $event The event to handle
+     */
+    public function onEarlyKernelRequest(KernelEvent $event)
+    {
+        if (HttpKernelInterface::MASTER_REQUEST === $event->getRequestType()) {
+            if (isset($this['exception_handler'])) {
+                $this['dispatcher']->addSubscriber($this['exception_handler']);
+            }
+            $this['dispatcher']->addSubscriber(new ResponseListener($this['charset']));
+        }
+    }
+
+    /**
      * Handles onKernelRequest events.
+     *
+     * @param KernelEvent $event The event to handle
      */
     public function onKernelRequest(KernelEvent $event)
     {
@@ -434,7 +454,10 @@ class Application extends \Pimple implements HttpKernelInterface, EventSubscribe
     static public function getSubscribedEvents()
     {
         return array(
-            KernelEvents::REQUEST    => 'onKernelRequest',
+            KernelEvents::REQUEST    => array(
+                array('onEarlyKernelRequest', 256),
+                array('onKernelRequest')
+            ),
             KernelEvents::CONTROLLER => 'onKernelController',
             KernelEvents::RESPONSE   => 'onKernelResponse',
             KernelEvents::EXCEPTION  => 'onKernelException',
